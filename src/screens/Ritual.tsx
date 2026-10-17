@@ -19,7 +19,7 @@ interface Props {
   engine: SkyEngine | null;
   release: (text: string) => Promise<SkyStar>;
   onDone: (star: SkyStar) => void;
-  onError: () => void;
+  onError: (e?: unknown) => void;
 }
 
 export default function Ritual({ text, engine, release, onDone, onError }: Props) {
@@ -68,8 +68,8 @@ export default function Ritual({ text, engine, release, onDone, onError }: Props
             at(800, () => onDone(s));
           }
         })
-        .catch(() => {
-          if (!cancelled) onError();
+        .catch((e) => {
+          if (!cancelled) onError(e);
         });
     });
     at(STAGES[4].at, () => {

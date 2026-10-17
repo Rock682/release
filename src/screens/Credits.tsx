@@ -7,7 +7,7 @@ interface Props {
   /** The words waiting to be released, shown so the person knows what they're paying for. */
   text: string;
   onBack: () => void;
-  onPaid: () => void;
+  onPaid: () => void | Promise<void>;
 }
 
 /** Every release after the first: one payment, then the ritual starts straight away. */
@@ -20,9 +20,10 @@ export default function Credits({ text, onBack, onPaid }: Props) {
     setBusy(true);
     setError('');
     const r = await pay(RELEASE_PRICE.amount, RELEASE_PRICE.currency, 'release');
+    if (r.ok) await onPaid();
     setBusy(false);
-    if (r.ok) onPaid();
-    else setError('The payment didn’t go through. Nothing was charged.');
+    if (r.ok) return;
+    setError('The payment didn’t go through. Nothing was charged.');
   };
 
   return (

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import StarSky from './sky/StarSky';
 import type { SkyEngine } from './sky/engine';
-import { store, type SkyStar } from './data/store';
+import { store, type Allowance, type SkyStar } from './data/store';
 import { needsCare, scrub } from './lib/safety';
-import { wallet } from './lib/wallet';
 import { CANDLE_PRICE, pay } from './lib/payments';
 import Begin from './screens/Begin';
 import Ritual from './screens/Ritual';
@@ -22,9 +21,14 @@ type ScreenName = 'begin' | 'care' | 'ritual' | 'forgiveness' | 'sky' | 'credits
 const STACKED: ScreenName[] = ['sky', 'credits', 'share', 'care', 'pure'];
 const DAY = 86_400_000;
 
-function allowance() {
-  const w = wallet.get();
-  return { free: !w.freeUsed, credits: w.credits };
+const DEFAULT_ALLOWANCE: Allowance = { free: true, credits: 0, allFree: false, testMode: true };
+
+/** Plain words for what went wrong with a release. */
+function releaseProblem(e: unknown): string {
+  const m = String((e as { message?: string })?.message ?? e);
+  if (m.includes('slow_down')) return 'You’ve released a lot in a short time. Rest a while, then come back.';
+  if (m.includes('empty')) return 'There was nothing left to release. Try writing it a little differently.';
+  return 'The sky couldn’t be reached just now. Nothing was spent, please try again.';
 }
 
 export default function App() {
@@ -33,7 +37,8 @@ export default function App() {
   const [ritualText, setRitualText] = useState('');
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [tonight, setTonight] = useState(false);
-  const [allow, setAllow] = useState(allowance);
+  const [allow, setAllow] = useState<Allowance>(DEFAULT_ALLOWANCE);
+  const [checking, setChecking] = useState(false);
   const [toast, setToast] = useState('');
   const [lastStar, setLastStar] = useState<{ id: string; releasedAt: number } | null>(null);
   const [, setVersion] = useState(0);
@@ -70,6 +75,12 @@ export default function App() {
 
   // Re-render counts and the open sheet when the sky changes.
   useEffect(() => store.subscribe(() => setVersion((v) => v + 1)), []);
+
+  // What this visitor may do comes from the server.
+  const refreshAllowance = useCallback(() => {
+    store.getAllowance().then(setAllow).catch(() => {});
+  }, []);
+  useEffect(refreshAllowance, [refreshAllowance]);
 
   useEffect(() => {
     if (!toast) return;
@@ -114,14 +125,24 @@ export default function App() {
 
   const back = () => history.back();
 
-  const startRitual = (raw: string) => {
-    if (!wallet.spend()) {
-      go('credits');
-      return;
+  /** Ask the server whether this release is free, paid for, or needs paying. */
+  const startRitual = async (raw: string) => {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const a = await store.getAllowance();
+      setAllow(a);
+      if (!a.allFree && !a.free && a.credits < 1) {
+        go('credits');
+        return;
+      }
+      setRitualText(scrub(raw));
+      go('ritual');
+    } catch (e) {
+      setToast(releaseProblem(e));
+    } finally {
+      setChecking(false);
     }
-    setAllow(allowance());
-    setRitualText(scrub(raw));
-    go('ritual');
   };
 
   const onRelease = () => {
@@ -167,14 +188,18 @@ export default function App() {
           engine={engine}
           release={(t) => store.release(t)}
           onDone={(s) => {
+            refreshAllowance();
             setLastStar({ id: s.id, releasedAt: s.releasedAt });
             setText('');
             go('forgiveness');
           }}
-          onError={() => {
-            wallet.add(1);
-            setAllow(allowance());
-            setToast('The sky couldn’t take it just now. Your release was kept, please try again.');
+          onError={(e) => {
+            refreshAllowance();
+            if (String((e as Error)?.message).includes('payment_required')) {
+              go('credits');
+              return;
+            }
+            setToast(releaseProblem(e));
             go('begin');
           }}
         />
@@ -203,10 +228,14 @@ export default function App() {
         <Credits
           text={text.trim()}
           onBack={back}
-          onPaid={() => {
-            wallet.add(1);
-            setAllow(allowance());
-            startRitual(text.trim());
+          onPaid={async () => {
+            try {
+              // Test mode: the server adds the credit. Live payments will be verified server-side instead.
+              setAllow(await store.addTestCredit());
+              await startRitual(text.trim());
+            } catch (e) {
+              setToast(releaseProblem(e));
+            }
           }}
         />
       )}

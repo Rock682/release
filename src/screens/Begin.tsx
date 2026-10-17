@@ -1,7 +1,6 @@
 import { useId } from 'react';
 import { C, F, T } from '../theme';
 import { MAX_CHARS } from '../lib/safety';
-import { LAUNCH_ALL_FREE } from '../lib/payments';
 import { Brand, GhostButton, IconButton, Live, Mono, Scrim, Screen, StarIcon } from '../ui/kit';
 
 interface Props {
@@ -10,7 +9,7 @@ interface Props {
   onRelease: () => void;
   onExplore: () => void;
   count: number;
-  allowance: { free: boolean; credits: number };
+  allowance: { free: boolean; credits: number; allFree: boolean };
 }
 
 export default function Begin({ text, onText, onRelease, onExplore, count, allowance }: Props) {
@@ -19,8 +18,8 @@ export default function Begin({ text, onText, onRelease, onExplore, count, allow
   const ready = text.trim().length > 0;
   const barColor = n > MAX_CHARS * 0.9 ? '#E58C6E' : C.gold;
 
-  let note = LAUNCH_ALL_FREE ? 'EVERY RELEASE IS FREE THIS WEEK' : 'YOUR FIRST RELEASE IS FREE';
-  if (!allowance.free && !LAUNCH_ALL_FREE) {
+  let note = allowance.allFree ? 'EVERY RELEASE IS FREE THIS WEEK' : 'YOUR FIRST RELEASE IS FREE';
+  if (!allowance.free && !allowance.allFree) {
     note = allowance.credits > 0 ? 'YOUR PAID RELEASE IS READY' : '';
   }
 

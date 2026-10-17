@@ -10,11 +10,10 @@
  */
 export const PAYMENTS_LIVE = false;
 
-/**
- * Launch switch: when true, every release is free and no payment screen
- * appears. Useful for a launch week (e.g. a Reddit post).
+/*
+ * Launch switch ("every release free this week") now lives in the database:
+ * settings.launch_all_free. Free stars last settings.free_lifespan_hours (48).
  */
-export const LAUNCH_ALL_FREE = false;
 
 export interface Price {
   amount: number;
